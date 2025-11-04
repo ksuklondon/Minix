@@ -1,0 +1,9 @@
+#include <stdio.h>
+#include <lib.h>
+
+int main() {
+    message m;
+    int ret = _syscall(MM, 79, &m);
+    printf("Max children parent PID: %d\n", ret);
+    return 0;
+}
