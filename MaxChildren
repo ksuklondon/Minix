@@ -1,0 +1,37 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <lib.h>
+
+int main(int argc, char **argv)
+{
+    int i;
+    message m;
+    int ret;
+    int children;
+
+    if (argc != 2)
+        return 0;
+
+    children = atoi(argv[1]);
+    printf("create %d children\n", children);
+
+    for (i = 0; i < children; ++i)
+    {
+        if (fork() == 0)
+        {
+            sleep(5);
+            return 0;
+        }
+    }
+
+    sleep(1);
+
+    ret = _syscall(MM, MAXCHILDREN, &m);
+    printf("syscall MAXCHILDREN return: %d\n", ret);
+
+    ret = _syscall(MM, WHOMAXCHILDREN, &m);
+    printf("syscall WHOMAXCHILDREN return: %d\n", ret);
+
+    return 0;
+}
