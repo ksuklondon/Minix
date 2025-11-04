@@ -1,0 +1,112 @@
+55227 mod8 = 3 czyli: 3. Zwrócić pid procesu mającego największą liczbę potomków (dzieci, wnuków …), zwrócić liczbą 
+potomków dla tego procesu. Pominąć proces o podanym w parametrze identyfikatorze pid. 
+
+misc.c:
+PUBLIC int do_testchildren()
+{
+  register struct mproc *rmp;
+  pid_t exclude_pid;
+  int i, desc_count;
+  int max_count;
+  pid_t max_pid;
+  message m;
+
+  /* Get PID to exclude from the message */
+  exclude_pid = m_in.m1_i1;
+  printf("Debug: otrzymano PID do pominiecia: %d\n", exclude_pid);
+
+  /* Initialize variables */
+  max_count = -1;
+  max_pid = -1;
+
+  /* Main loop - count descendants for each process */
+  for (i = 0; i < NR_PROCS; i++) {
+    rmp = &mproc[i];
+    if (!(rmp->mp_flags & IN_USE)) continue;    /* skip unused slots */
+    if (rmp->mp_pid == exclude_pid) continue;   /* skip excluded process */
+    if (rmp->mp_pid == 0) continue;            /* skip process 0 */
+
+    desc_count = count_descendants(rmp);
+    printf("Debug: proces %d ma %d potomkow\n", rmp->mp_pid, desc_count);
+    
+    if (desc_count > max_count) {
+      max_count = desc_count;
+      max_pid = rmp->mp_pid;
+    }
+  }
+
+  printf("Debug: znaleziono PID=%d z %d potomkami\n", max_pid, max_count);
+
+  /* Store results in message structure */
+  m.m2_i1 = max_pid;         /* PID of process with most descendants */
+  m.m2_i2 = max_count;       /* Number of descendants */
+  
+  /* Copy results to reply message */
+  mp->mp_reply.m2_i1 = m.m2_i1;
+  mp->mp_reply.m2_i2 = m.m2_i2;
+
+  return 0;
+}
+
+PRIVATE int count_descendants(struct mproc *mp)
+{
+  int count = 0;
+  int i;
+  struct mproc *rmp;
+  
+  /* Sprawdź wszystkie procesy */
+  for (i = 0; i < NR_PROCS; i++) {
+    rmp = &mproc[i];
+    if (!(rmp->mp_flags & IN_USE)) continue;  /* pomiń nieużywane */
+    if (rmp->mp_pid == mp->mp_pid) continue;  /* pomiń samego siebie */
+
+    /* Sprawdź czy to bezpośredni potomek */
+    if (rmp->mp_parent == mp->mp_pid) {
+        count++;  /* znaleziono bezpośredniego potomka */
+        
+        /* Rekurencyjnie policz potomków tego potomka */
+        count += count_descendants(rmp);
+        printf("Debug: proces %d jest potomkiem procesu %d\n", 
+               rmp->mp_pid, mp->mp_pid);
+    }
+  }
+
+  return count;
+}
+
+
+
+
+test.c:
+int main(argc, argv)
+int argc;
+char *argv[];
+{
+    message m;
+    int result;
+    int exclude_pid;
+
+    /* Sprawdzenie argumentów */
+    if (argc != 2) {
+        printf("Użycie: %s <pid_do_pominięcia>\n", argv[0]);
+        exit(1);
+    }
+
+    /* Konwersja i walidacja parametru */
+    exclude_pid = atoi(argv[1]);
+
+    /* Wywołanie systemowe */
+    m.m1_i1 = exclude_pid;
+    result = _syscall(MM, TESTCHILDREN, &m);
+
+    if (result != 0) {
+        printf("Błąd wywołania systemowego: %d\n", result);
+        return 1;
+    }
+
+    /* Wyświetlenie wyników */
+    printf("PID procesu z największą liczbą potomków: %d\n", m.m2_i1);
+    printf("Liczba potomków: %d\n", m.m2_i2);
+
+    return 0;
+}
